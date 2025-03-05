@@ -2,7 +2,7 @@ BIN := sqls
 ifeq ($(OS),Windows_NT)
 BIN := $(BIN).exe
 endif
-VERSION := $$(make -s show-version)
+VERSION = $$(make -s show-version)
 CURRENT_REVISION := $(shell git rev-parse --short HEAD)
 BUILD_LDFLAGS := "-s -w -X main.revision=$(CURRENT_REVISION)"
 GOOS := $(shell go env GOOS)
@@ -17,7 +17,7 @@ build:
 	go build -ldflags=$(BUILD_LDFLAGS) -o $(BIN) .
 
 .PHONY: release
-release:
+release: $(GOBIN)/gobump
 	go build -ldflags=$(BUILD_LDFLAGS) -o $(BIN) .
 	zip -r sqls-$(GOOS)-$(VERSION).zip $(BIN)
 
@@ -27,10 +27,10 @@ install:
 
 .PHONY: show-version
 show-version: $(GOBIN)/gobump
-	gobump show -r .
+	@$(GOBIN)/gobump show -r .
 
 $(GOBIN)/gobump:
-	go install github.com/x-motemen/gobump/cmd/gobump@latest
+	env GOOS=$(shell go env GOHOSTOS) GOARCH=$(shell go env GOHOSTARCH) go install github.com/x-motemen/gobump/cmd/gobump@latest
 
 .PHONY: test
 test: build
@@ -48,7 +48,7 @@ endif
 ifneq ($(shell git rev-parse --abbrev-ref HEAD),master)
 	$(error current branch is not master)
 endif
-	@gobump up -w .
+	@$(GOBIN)/gobump up -w .
 	git commit -am "bump up version to $(VERSION)"
 	git tag "v$(VERSION)"
 	git push origin master

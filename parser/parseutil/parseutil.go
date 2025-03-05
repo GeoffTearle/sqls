@@ -26,10 +26,7 @@ func (ti *TableInfo) isMatchTableName(name string) bool {
 }
 
 func (ti *TableInfo) hasSubQuery() bool {
-	if ti.SubQueryColumns != nil && len(ti.SubQueryColumns) > 0 {
-		return true
-	}
-	return false
+	return len(ti.SubQueryColumns) > 0
 }
 
 type SubQueryInfo struct {
@@ -60,7 +57,7 @@ func extractFocusedStatement(parsed ast.TokenList, pos token.Pos) (ast.TokenList
 	nodeWalker := NewNodeWalker(parsed, pos)
 	matcher := astutil.NodeMatcher{NodeTypes: []ast.NodeType{ast.TypeStatement}}
 	if !nodeWalker.CurNodeIs(matcher) {
-		return nil, fmt.Errorf("Not found statement, Node: %q, Position: (%d, %d)", parsed.String(), pos.Line, pos.Col)
+		return nil, fmt.Errorf("not found statement, Node: %q, Position: (%d, %d)", parsed.String(), pos.Line, pos.Col)
 	}
 	stmt := nodeWalker.CurNodeTopMatched(matcher).(ast.TokenList)
 	return stmt, nil
@@ -244,14 +241,15 @@ func extractTables(parsed ast.TokenList, pos token.Pos, stopOnPos bool) ([]*Tabl
 	}
 
 	tableMap := map[string]*TableInfo{}
-	for _, table := range tables {
-		tableMap[table.DatabaseSchema+"\t"+table.Name] = table
-	}
 	cleanTables := []*TableInfo{}
-	for _, table := range tableMap {
-		cleanTables = append(cleanTables, table)
-	}
 
+	for _, table := range tables {
+		tableKey := table.DatabaseSchema + "\t" + table.Name
+		if _, ok := tableMap[tableKey]; !ok {
+			tableMap[tableKey] = table
+			cleanTables = append(cleanTables, table)
+		}
+	}
 	return cleanTables, nil
 }
 

@@ -8,8 +8,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"runtime"
-	"strings"
+	"path/filepath"
 
 	"github.com/sourcegraph/jsonrpc2"
 	"github.com/urfave/cli/v2"
@@ -20,7 +19,7 @@ import (
 
 const name = "sqls"
 
-const version = "0.2.28"
+const version = "0.2.45"
 
 var revision = "HEAD"
 
@@ -34,7 +33,7 @@ func main() {
 
 func realMain() error {
 	app := &cli.App{
-		Name:    "sqls",
+		Name:    name,
 		Version: fmt.Sprintf("Version:%s, Revision:%s\n", version, revision),
 		Usage:   "An implementation of the Language Server Protocol for SQL.",
 		Flags: []cli.Flag{
@@ -63,6 +62,12 @@ func realMain() error {
 					editorEnv := os.Getenv("EDITOR")
 					if editorEnv == "" {
 						editorEnv = "vim"
+					}
+					dir := filepath.Dir(config.YamlConfigPath)
+					if _, err := os.Stat(dir); errors.Is(err, os.ErrNotExist) {
+						if err := os.MkdirAll(dir, 0755); err != nil {
+							return fmt.Errorf("cannot create config directory, %w", err)
+						}
 					}
 					return openEditor(editorEnv, config.YamlConfigPath)
 				},
@@ -129,7 +134,7 @@ func serve(c *cli.Context) error {
 	} else {
 		// Load default config
 		cfg, err := config.GetDefaultConfig()
-		if err != nil && !errors.Is(config.ErrNotFoundConfig, err) {
+		if err != nil && !errors.Is(err, config.ErrNotFoundConfig) {
 			return fmt.Errorf("cannot read default config, %w", err)
 		}
 		server.DefaultFileCfg = cfg
@@ -172,15 +177,7 @@ func (stdrwc) Close() error {
 }
 
 func openEditor(program string, args ...string) error {
-	cmdargs := strings.Join(args, " ")
-	command := program + " " + cmdargs
-
-	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		cmd = exec.Command("cmd", "/c", command)
-	} else {
-		cmd = exec.Command("sh", "-c", command)
-	}
+	cmd := exec.CommandContext(context.Background(), program, args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

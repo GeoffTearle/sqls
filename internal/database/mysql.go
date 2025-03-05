@@ -48,7 +48,7 @@ func mysqlOpen(dbConnCfg *DBConfig) (*DBConnection, error) {
 		}
 		conn = dbConn
 	}
-	if err := conn.Ping(); err != nil {
+	if err := conn.PingContext(context.Background()); err != nil {
 		return nil, fmt.Errorf("cannot ping to database, %w", err)
 	}
 
@@ -116,7 +116,7 @@ func genMysqlConfig(connCfg *DBConfig) (*mysql.Config, error) {
 		}
 		cfg.Addr = connCfg.Path
 		cfg.Net = string(connCfg.Proto)
-  case ProtoHTTP:
+	case ProtoHTTP:
 	default:
 		return nil, fmt.Errorf("default addr for network %s unknown", connCfg.Proto)
 	}
@@ -318,7 +318,7 @@ func (db *MySQLDBRepository) DescribeForeignKeysBySchema(ctx context.Context, sc
 				  on fks.CONSTRAINT_SCHEMA = kcu.TABLE_SCHEMA
 					  and fks.TABLE_NAME = kcu.TABLE_NAME
 					  and fks.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME
-	where fks.CONSTRAINT_SCHEMA = ?
+	where fks.CONSTRAINT_SCHEMA = ? and  kcu.REFERENCED_COLUMN_NAME is not null
 	order by fks.CONSTRAINT_NAME,
 			 kcu.ORDINAL_POSITION
 		`, schemaName)

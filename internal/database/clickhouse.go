@@ -47,7 +47,7 @@ func clickhouseOpen(dbConnCfg *DBConfig) (*DBConnection, error) {
 		conn = dbConn
 	}
 
-	if err = conn.Ping(); err != nil {
+	if err = conn.PingContext(context.Background()); err != nil {
 		return nil, err
 	}
 
@@ -224,31 +224,26 @@ func (db *clickhouseSQLDBRepository) DescribeDatabaseTable(ctx context.Context) 
 	rows, err := db.Conn.QueryContext(
 		ctx,
 		`
-SELECT c.table_schema,
-       c.table_name,
-       c.column_name,
-       c.column_type,
-       CASE c.is_nullable
-         WHEN 1 THEN 'YES'
-         ELSE 'NO'
-       END,
-       CASE cu.constraint_name
-         WHEN 'PRIMARY' THEN 'YES'
-         ELSE 'NO'
-       END,
-       c.column_default,
-       ''
-FROM   information_schema.columns c
-       LEFT JOIN (SELECT icu.table_schema,
-                         icu.table_name,
-                         icu.column_name,
-                         icu.constraint_name
-                  FROM   information_schema.key_column_usage icu
-                  WHERE  icu.constraint_name = 'PRIMARY') cu using (
-       table_schema, table_name, column_name)
-WHERE  ( c.table_schema = currentDatabase()
-          OR c.table_schema = '' )
-       AND c.table_name NOT LIKE '%inner%'
+SELECT 
+    c.database ,
+    c.table ,
+    c.name,
+    c.type ,
+    CASE 
+        WHEN c.type LIKE 'Nullable(%)' THEN 'YES'
+        ELSE 'NO'
+    END,
+    CASE 
+        WHEN c.is_in_primary_key THEN 'YES'
+        ELSE 'NO'
+    END ,
+    c.default_expression,
+    ''
+FROM 
+    system.columns c
+WHERE  ( c.database = currentDatabase()
+          OR c.database = '' )
+       AND c.table NOT LIKE '%inner%'
 `)
 	if err != nil {
 		log.Fatal(err)
@@ -257,10 +252,11 @@ WHERE  ( c.table_schema = currentDatabase()
 	tableInfos := []*ColumnDesc{}
 	for rows.Next() {
 		var tableInfo ColumnDesc
+		var columnName *string
 		err := rows.Scan(
 			&tableInfo.Schema,
 			&tableInfo.Table,
-			&tableInfo.Name,
+			&columnName,
 			&tableInfo.Type,
 			&tableInfo.Null,
 			&tableInfo.Key,
@@ -269,6 +265,9 @@ WHERE  ( c.table_schema = currentDatabase()
 		)
 		if err != nil {
 			return nil, err
+		}
+		if columnName != nil {
+			tableInfo.Name = *columnName
 		}
 		tableInfos = append(tableInfos, &tableInfo)
 	}
@@ -279,31 +278,26 @@ func (db *clickhouseSQLDBRepository) DescribeDatabaseTableBySchema(ctx context.C
 	rows, err := db.Conn.QueryContext(
 		ctx,
 		`
-SELECT c.table_schema,
-       c.table_name,
-       c.column_name,
-       c.column_type,
-       CASE c.is_nullable
-         WHEN 1 THEN 'YES'
-         ELSE 'NO'
-       END,
-       CASE cu.constraint_name
-         WHEN 'PRIMARY' THEN 'YES'
-         ELSE 'NO'
-       END,
-       c.column_default,
-       ''
-FROM   information_schema.columns c
-       LEFT JOIN (SELECT icu.table_schema,
-                         icu.table_name,
-                         icu.column_name,
-                         icu.constraint_name
-                  FROM   information_schema.key_column_usage icu
-                  WHERE  icu.constraint_name = 'PRIMARY') cu using (
-       table_schema, table_name, column_name)
-WHERE  ( c.table_schema = ?
-          OR c.table_schema = '' )
-       AND c.table_name NOT LIKE '%inner%'
+SELECT 
+    c.database ,
+    c.table ,
+    c.name,
+    c.type ,
+    CASE 
+        WHEN c.type LIKE 'Nullable(%)' THEN 'YES'
+        ELSE 'NO'
+    END,
+    CASE 
+        WHEN c.is_in_primary_key THEN 'YES'
+        ELSE 'NO'
+    END ,
+    c.default_expression,
+    ''
+FROM 
+    system.columns c
+WHERE  ( c.database = ?
+          OR c.database = '' )
+       AND c.table NOT LIKE '%inner%'
 `, schemaName)
 	if err != nil {
 		log.Println("schema", schemaName, err.Error())
@@ -313,10 +307,11 @@ WHERE  ( c.table_schema = ?
 	tableInfos := []*ColumnDesc{}
 	for rows.Next() {
 		var tableInfo ColumnDesc
+		var columnName *string
 		err := rows.Scan(
 			&tableInfo.Schema,
 			&tableInfo.Table,
-			&tableInfo.Name,
+			&columnName,
 			&tableInfo.Type,
 			&tableInfo.Null,
 			&tableInfo.Key,
@@ -325,6 +320,9 @@ WHERE  ( c.table_schema = ?
 		)
 		if err != nil {
 			return nil, err
+		}
+		if columnName != nil {
+			tableInfo.Name = *columnName
 		}
 		tableInfos = append(tableInfos, &tableInfo)
 	}
